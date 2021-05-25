@@ -180,7 +180,9 @@
                 "kind": "http",
                 "inputs": {
                     "statusCode": "@variables('HttpResponseCode')",
-                    "body": "@json(variables('ImageDescription'))"
+                    "body": {
+                        "ImageParseResult": "@{variables('ImageDescription')}"
+                    }
                 },
                 "runAfter": {
                     "Send_an_email_(V2)": [
