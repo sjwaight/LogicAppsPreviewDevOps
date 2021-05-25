@@ -1,0 +1,229 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Parse_HTTP_Call_JSON_Body": {
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@triggerBody()",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "FileToProcess": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Initialize_EmailRecipient_variable": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_ImageDescription_variable": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ImageDescription",
+                            "type": "string",
+                            "value": "Unable to determine the contents of image!"
+                        }
+                    ]
+                },
+                "runAfter": {}
+            },
+            "Check_FileToProcess_is_not_blank": {
+                "type": "If",
+                "expression": {
+                    "and": [
+                        {
+                            "not": {
+                                "equals": [
+                                    "@empty(body('Parse_HTTP_Call_JSON_Body')?['FileToProcess'])",
+                                    "@true"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": {
+                    "Describe_Image_URL": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "referenceName": "cognitiveservicescomputervision"
+                                }
+                            },
+                            "method": "post",
+                            "body": {
+                                "url": "@body('Parse_HTTP_Call_JSON_Body')?['FileToProcess']"
+                            },
+                            "path": "/vision/v2.0/describeImageURL"
+                        },
+                        "runAfter": {}
+                    },
+                    "At_least_one_Caption": {
+                        "type": "If",
+                        "expression": {
+                            "and": [
+                                {
+                                    "greaterOrEquals": [
+                                        "@length(body('Describe_Image_URL')?['description']?['captions'])",
+                                        1
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {
+                            "Set_ImageDescription_Variable_from_first_Caption": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                    "name": "ImageDescription",
+                                    "value": "@{first(body('Describe_Image_URL')?['description']?['captions']).text}"
+                                },
+                                "runAfter": {}
+                            }
+                        },
+                        "runAfter": {
+                            "Describe_Image_URL": [
+                                "Succeeded"
+                            ]
+                        },
+                        "else": {
+                            "actions": {
+                                "Set_ImageDescription_to_no_Caption": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ImageDescription",
+                                        "value": "Computer Vision didn't return any Captions."
+                                    },
+                                    "runAfter": {}
+                                }
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Parse_HTTP_Call_JSON_Body": [
+                        "Succeeded"
+                    ]
+                },
+                "else": {
+                    "actions": {
+                        "Set_ImageDescription_to_No_Image_Provided": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "ImageDescription",
+                                "value": "No image provided to process."
+                            },
+                            "runAfter": {}
+                        },
+                        "Set_HttpResponseCode_variable": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "HttpResponseCode",
+                                "value": 400
+                            },
+                            "runAfter": {
+                                "Set_ImageDescription_to_No_Image_Provided": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "Send_an_email_(V2)": {
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "referenceName": "office365"
+                        }
+                    },
+                    "method": "post",
+                    "body": {
+                        "To": "@variables('EmailRecipient')",
+                        "Subject": "Image AI Description Result",
+                        "Body": "<p>@{variables('ImageDescription')}<br>\n<br>\nThanks,<br>\nAzure AI!</p>"
+                    },
+                    "path": "/v2/Mail"
+                },
+                "runAfter": {
+                    "Check_FileToProcess_is_not_blank": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_EmailRecipient_variable": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "EmailRecipient",
+                            "type": "string",
+                            "value": "@appsetting('recipient-email')"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_variable": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Response": {
+                "type": "Response",
+                "kind": "http",
+                "inputs": {
+                    "statusCode": "@variables('HttpResponseCode')",
+                    "body": "@json(variables('ImageDescription'))"
+                },
+                "runAfter": {
+                    "Send_an_email_(V2)": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_variable": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "HttpResponseCode",
+                            "type": "integer",
+                            "value": 200
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_ImageDescription_variable": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "triggers": {
+            "manual": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "FileToProcess": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}
