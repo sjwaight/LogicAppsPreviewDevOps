@@ -73,7 +73,9 @@ Function Get-ApiConnections {
       };
       "connectionRuntimeUrl" = $connectionResource.Properties.connectionRuntimeUrl;
       "authentication"       = @{
-        "type" = "ManagedServiceIdentity"
+        "type"    = "Raw";
+        "scheme"  = "Key";
+        "parameter" = "@appsetting('$name-connectionKey')";
       }
     }
   }
