@@ -12,7 +12,7 @@
       "name": "Attach to .NET Functions",
       "type": "coreclr",
       "request": "attach",
-      "processId": "${command:azureLogicAppsV2.pickProcess}"
+      "processId": "${command:azureFunctions.pickProcess}"
     }
   ]
 }
